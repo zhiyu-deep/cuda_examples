@@ -5,17 +5,21 @@ include(cuda-common.cmake)
 
 include_directories(${PROJECT_SOURCE_DIR})
 
+
+
+#=======================functions=========================================
 # 1. scan
-add_library(scan STATIC
-        scan/scan_impl.cu
-        )
+add_library(scan STATIC scan/scan_impl.cu)
 # 2. gemm
 file(GLOB gemm_files gemm/*.cu gemm/*.cpp)
 add_library(gemm STATIC "${gemm_files}")
 target_include_directories(gemm INTERFACE ${CMAKE_CURRENT_LIST_DIR}/gemm)
 # 3. conv
-add_library(conv STATIC
-        conv/myImg2Col.cu)
+add_library(conv STATIC conv/myImg2Col.cu)
+# 4. transpose
+file(GLOB transpose_files transpose/*.cu transpose/*.cpp)
+add_library(transpose STATIC "${transpose_files}")
+include_directories(transpose)
 
 
 
@@ -30,4 +34,5 @@ target_link_libraries(arm64_test
         PRIVATE cudart
         PRIVATE scan
         PRIVATE gemm
-        PRIVATE conv)
+        PRIVATE conv
+        PRIVATE transpose)

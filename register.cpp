@@ -6,9 +6,11 @@
 
 
 extern void GlobalRegisterGemm();
+extern void GlobalRegisterTranspose();
 
 bool GlobalRegister() {
     GlobalRegisterGemm();
+    GlobalRegisterTranspose();
     return true;
 }
 

@@ -4,8 +4,13 @@
 
 #include "common.cuh"
 
-int GetRand(int min, int max) {
-    return (rand() % (max - min + 1)) + min;
+#include<random>
+
+float GetRand() {
+    using namespace std;
+    static default_random_engine e;
+    static uniform_real_distribution<float> u(-1, 1);
+    return u(e);
 }
 
 void Default() { return; }

@@ -53,37 +53,75 @@ private:
 
 //========================================================(init)========================================================
 
-int GetRand(int min, int max);
+float GetRand();
 
 /**
- * @brief 为当前计算任务分配input.
+ * @brief 管理一组input指针.
  */
 template<typename T>
-void InputMallocAndCpy(T **h_ptr, T**d_ptr, int length) {
+class InputCallBack {
+public:
+    InputCallBack(T **h_ptr, T **d_ptr) : h_ptr_(h_ptr), d_ptr_(d_ptr) {}
+
+    InputCallBack(InputCallBack &&obj) : h_ptr_(obj.h_ptr_), d_ptr_(obj.d_ptr_) {
+        obj.h_ptr_ = nullptr;
+        obj.d_ptr_ = nullptr;
+    }
+
+    ~InputCallBack() {
+        if (h_ptr_ && *h_ptr_) {
+            free(*h_ptr_);
+            *h_ptr_ = nullptr;
+        }
+        if (d_ptr_ && *d_ptr_) {
+            cudaFree(*d_ptr_);
+            *d_ptr_ = nullptr;
+        }
+    }
+private:
+    T **h_ptr_;
+    T **d_ptr_;
+};
+
+/**
+ * @brief 为当前计算任务分配input; 外部只负责不用, 不负责释放.
+ */
+template<typename T>
+auto InputMallocAndCpy(T **h_ptr, T**d_ptr, int length) -> InputCallBack<T> {
     *h_ptr = (T*)malloc(sizeof(T) * length);
     cudaMalloc((void**)d_ptr, sizeof(T) * length);
     for (int i = 0; i < length; i++) {
-        (*h_ptr)[i] = GetRand(-1, 1);
+        (*h_ptr)[i] = GetRand();
     }
     cudaMemcpy(*d_ptr, *h_ptr, sizeof(T) * length, cudaMemcpyHostToDevice);
+    return InputCallBack<T>(h_ptr, d_ptr);
 }
 
 
+/**
+ * @brief 管理一组output指针; 外部只负责用, 不负责释放.
+ */
 template<typename T>
-class CallBack {
+class OutputCallBack {
 public:
-    CallBack(T *h_ptr, T *refer_ptr, T*d_ptr, int length)
+    OutputCallBack(T **h_ptr, T **refer_ptr, T**d_ptr, int length)
         : h_ptr_(h_ptr),
           refer_ptr_(refer_ptr),
           d_ptr_(d_ptr),
           length_(length) {}
 
-    ~CallBack() {
+    OutputCallBack(OutputCallBack &&obj) : h_ptr_(obj.h_ptr_), refer_ptr_(obj.refer_ptr_), d_ptr_(obj.d_ptr_), length_(obj.length_) {
+        obj.h_ptr_ = nullptr;
+        obj.d_ptr_ = nullptr;
+        obj.refer_ptr_ = nullptr;
+    }
+
+    ~OutputCallBack() {
         MemCpy();
         bool fail = false;
         for (int i = 0; i < length_; i++) {
-            auto h_output = h_ptr_[i];
-            auto refer_output = refer_ptr_[i];
+            auto h_output = (*h_ptr_)[i];
+            auto refer_output = (*refer_ptr_)[i];
             if (std::abs(h_output - refer_output) / std::abs(h_output) > 5e-2) {
                 fail = true;
             }
@@ -93,19 +131,28 @@ public:
         } else {
             std::cout << "eval fail!" << std::endl;
         }
-        free(h_ptr_);
-        free(refer_ptr_);
-        cudaFree(d_ptr_);
+        if (h_ptr_ && *h_ptr_) {
+            free(*h_ptr_);
+            h_ptr_ = nullptr;
+        }
+        if (refer_ptr_ && *refer_ptr_) {
+            free(*refer_ptr_);
+            refer_ptr_ = nullptr;
+        }
+        if (d_ptr_ && *d_ptr_) {
+            cudaFree(*d_ptr_);
+            d_ptr_ = nullptr;
+        }
     }
 
 private:
     void MemCpy() {
-        cudaMemcpy(h_ptr_, d_ptr_, sizeof(T) * length_, cudaMemcpyDeviceToHost);
+        cudaMemcpy(*h_ptr_, *d_ptr_, sizeof(T) * length_, cudaMemcpyDeviceToHost);
     }
 
-    T *h_ptr_;
-    T *refer_ptr_;
-    T *d_ptr_;
+    T **h_ptr_;
+    T **refer_ptr_;
+    T **d_ptr_;
     int length_;
 };
 
@@ -115,23 +162,21 @@ void Default();
  * @brief 为当前计算任务分配output指针(cpu output, gpu output, refer output); 务必在InputMallocAndCpy执行后执行.
  * @return 务必用 const& 来引用返回结果, 否则会提前析构.
  */
-template<typename T, typename Func = decltype(Default)>
-auto OutputMallocAndDelayCpy(T **h_ptr, T **refer_ptr, T **d_ptr, int length,
-                             const Func &f = Default) -> CallBack<T> {
+template<typename T>
+auto OutputMallocAndDelayCpy(T **h_ptr, T **refer_ptr, T **d_ptr, int length) -> OutputCallBack<T> {
     *h_ptr = (T*)malloc(sizeof(T) * length);
     *refer_ptr = (T*) malloc(sizeof(T) * length);
     cudaMalloc((void**)d_ptr,sizeof(T) * length);
     cudaMemset(*d_ptr, 0, sizeof(T) * length);
     cudaDeviceSynchronize();
-    // 完成在所有input上的计算, 将结果保存到所有的refer ptr.
-    f();
-    return CallBack<T>(*h_ptr, *refer_ptr, *d_ptr, length);
+    return OutputCallBack<T>(h_ptr, refer_ptr, d_ptr, length);
 }
 
 
 //=======================================================(launch)=======================================================
 
-#define TestLaunchKernel(funcName, f)                                        \
+#define TestLaunchKernel(funcName, f, refer_func)                            \
+    refer_func;                                                              \
     cudaGetLastError();                                                      \
     f;                                                                       \
     cudaDeviceSynchronize();                                                 \
@@ -153,14 +198,14 @@ constexpr int RepeatTimes = 100;
     cudaEventCreate(&start);                                                \
     cudaEventCreate(&end);                                                  \
     cudaEventRecord(start);                                                 \
-    for (int i = 0; i < repeat; i++) {                                      \
+    for (int i = 0; i < (repeat); i++) {                                    \
         f;                                                                  \
     }                                                                       \
     cudaEventRecord(end);                                                   \
     cudaEventSynchronize(end);                                              \
     float msec;                                                             \
     cudaEventElapsedTime(&msec, start, end);                                \
-    msec = msec / repeat;                                                   \
+    msec = msec / (repeat);                                                 \
     std::cout << #funcName << " elapse: " << msec << "(ms)" << std::endl;
 
 #endif //CUDA_TEST_COMMON_CUH

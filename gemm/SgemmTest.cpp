@@ -10,6 +10,7 @@
 
 #include "MyGemmV1.h"
 #include "MyGemmV2.cuh"
+#include "MyGemmV3.cuh"
 #include "nicolaswildeV1.cuh"
 #include "nicolaswildeV2.cuh"
 #include "nicolaswildeV3.cuh"
@@ -37,7 +38,6 @@ public:
 
     float **a_, **b_, **c_;
     int m_, n_, k_;
-    std::string name_;
 };
 
 class GemmTest : public Test {
@@ -55,40 +55,67 @@ public:
 
 private:
     bool SGemmTest() const {
-        int m = 2048, n = 2048, k = 32;
+        int m = 1024, n = 1024, k = 32;
         float *a, *b, *c, *d_a, *d_b, *d_c;
         float *refer_c;
-        // prepare input.
-        InputMallocAndCpy(&a, &d_a, m * k);
-        InputMallocAndCpy(&b, &d_b, n * k);
 
         {
-            const auto &callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n, GemmRefer(&a, &b, &refer_c, m, n, k));
-            TestLaunchKernel(MyGemmGlobalV1, MyGemmGlobalV1(d_a, d_b, d_c, m, n, k));
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV1, MyGemmGlobalV1(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(MyGemmGlobalV1(d_a, d_b, d_c, m, n, k));
             ProfileKernel(MyGemmGlobalV1, MyGemmGlobalV1(d_a, d_b, d_c, m, n, k), RepeatTimes);
         }
         {
-            const auto &callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n, GemmRefer(&a, &b, &refer_c, m, n, k));
-            TestLaunchKernel(MyGemmGlobalV2, MyGemmGlobalV2(d_a, d_b, d_c, m, n, k));
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV2, MyGemmGlobalV2(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(MyGemmGlobalV2(d_a, d_b, d_c, m, n, k));
             ProfileKernel(MyGemmGlobalV2, MyGemmGlobalV2(d_a, d_b, d_c, m, n, k), RepeatTimes);
         }
         {
-            const auto &callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n, GemmRefer(&a, &b, &refer_c, m, n, k));
-            TestLaunchKernel(nicolaswildeV1, nicolaswildeV1(d_a, d_b, d_c, m, n, k));
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV3, MyGemmGlobalV3(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV3(d_a, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV3, MyGemmGlobalV3(d_a, d_b, d_c, m, n, k), (RepeatTimes + 1));
+        }
+        {
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(nicolaswildeV1, nicolaswildeV1(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(nicolaswildeV1(d_a, d_b, d_c, m, n, k));
             ProfileKernel(nicolaswildeV1, nicolaswildeV1(d_a, d_b, d_c, m, n, k), RepeatTimes);
         }
         {
-            const auto &callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n, GemmRefer(&a, &b, &refer_c, m, n, k));
-            TestLaunchKernel(nicolaswildeV2, nicolaswildeV2(d_a, d_b, d_c, m, n, k));
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(nicolaswildeV2, nicolaswildeV2(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(nicolaswildeV2(d_a, d_b, d_c, m, n, k));
             ProfileKernel(nicolaswildeV2, nicolaswildeV2(d_a, d_b, d_c, m, n, k), RepeatTimes);
         }
         {
-            const auto &callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n, GemmRefer(&a, &b, &refer_c, m, n, k));
-            TestLaunchKernel(nicolaswildeV3, nicolaswildeV3(d_a, d_b, d_c, m, n, k));
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(nicolaswildeV3, nicolaswildeV3(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(nicolaswildeV3(d_a, d_b, d_c, m, n, k));
             ProfileKernel(nicolaswildeV3, nicolaswildeV3(d_a, d_b, d_c, m, n, k), RepeatTimes);
         }
