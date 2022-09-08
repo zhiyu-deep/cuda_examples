@@ -12,6 +12,9 @@
 #include "MyGemmV1.h"
 #include "MyGemmV2.cuh"
 #include "MyGemmV3.cuh"
+#include "MyGemmV4.cuh"
+#include "MyGemmV5.cuh"
+#include "MyGemmV6.cuh"
 #include "nicolaswildeV1.cuh"
 #include "nicolaswildeV2.cuh"
 #include "nicolaswildeV3.cuh"
@@ -66,9 +69,9 @@ private:
             auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
             // prepare output.
             auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
-            TestLaunchKernel(MyGemmGlobalV1, MyGemmGlobalV1(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            TestLaunchKernel(MyGemmGlobalV1(tile), MyGemmGlobalV1(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(MyGemmGlobalV1(d_a, d_b, d_c, m, n, k));
-            ProfileKernel(MyGemmGlobalV1, MyGemmGlobalV1(d_a, d_b, d_c, m, n, k), RepeatTimes);
+            ProfileKernel(MyGemmGlobalV1(tile), MyGemmGlobalV1(d_a, d_b, d_c, m, n, k), RepeatTimes);
         }
         {
             // prepare input.
@@ -76,9 +79,9 @@ private:
             auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
             // prepare output.
             auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
-            TestLaunchKernel(MyGemmGlobalV2, MyGemmGlobalV2(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            TestLaunchKernel(MyGemmGlobalV2(tile + vec), MyGemmGlobalV2(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(MyGemmGlobalV2(d_a, d_b, d_c, m, n, k));
-            ProfileKernel(MyGemmGlobalV2, MyGemmGlobalV2(d_a, d_b, d_c, m, n, k), RepeatTimes);
+            ProfileKernel(MyGemmGlobalV2(tile + vec), MyGemmGlobalV2(d_a, d_b, d_c, m, n, k), RepeatTimes);
         }
         {
             // prepare input.
@@ -91,9 +94,9 @@ private:
 
             // prepare output.
             auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
-            TestLaunchKernel(MyGemmGlobalV3Repeats, MyGemmGlobalV3Repeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            TestLaunchKernel(MyGemmGlobalV3(share)Repeats, MyGemmGlobalV3Repeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(MyGemmGlobalV3Repeats(d_d, d_b, d_c, m, n, k));
-            ProfileKernel(MyGemmGlobalV3Repeats, MyGemmGlobalV3Repeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+            ProfileKernel(MyGemmGlobalV3(share)Repeats, MyGemmGlobalV3Repeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
 
             cudaFree(d_d);
         }
@@ -108,9 +111,111 @@ private:
 
             // prepare output.
             auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
-            TestLaunchKernel(MyGemmGlobalV3NoRepeats, MyGemmGlobalV3NoRepeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            TestLaunchKernel(MyGemmGlobalV3(share)NoRepeats, MyGemmGlobalV3NoRepeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
             WarmupKernel(MyGemmGlobalV3NoRepeats(d_d, d_b, d_c, m, n, k));
-            ProfileKernel(MyGemmGlobalV3NoRepeats, MyGemmGlobalV3NoRepeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+            ProfileKernel(MyGemmGlobalV3(share)NoRepeats, MyGemmGlobalV3NoRepeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+
+            cudaFree(d_d);
+        }
+        {
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+
+            float *d_d = nullptr;
+            cudaMalloc(reinterpret_cast<void **>(&d_d), sizeof(float) * m * k);
+            Transpose(d_a, d_d, m, k);
+
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV4(share + share prefetch)Repeats, MyGemmGlobalV4Repeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV4Repeats(d_d, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV4(share + share prefetch)Repeats, MyGemmGlobalV4Repeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+
+            cudaFree(d_d);
+        }
+        {
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+
+            float *d_d = nullptr;
+            cudaMalloc(reinterpret_cast<void **>(&d_d), sizeof(float) * m * k);
+            Transpose(d_a, d_d, m, k);
+
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV4(share + share prefetch)NoRepeats, MyGemmGlobalV4NoRepeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV4NoRepeats(d_d, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV4(share + share prefetch)NoRepeats, MyGemmGlobalV4NoRepeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+
+            cudaFree(d_d);
+        }
+        {
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+
+            float *d_d = nullptr;
+            cudaMalloc(reinterpret_cast<void **>(&d_d), sizeof(float) * m * k);
+            Transpose(d_a, d_d, m, k);
+
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV5(share + global prefetch)Repeats, MyGemmGlobalV5Repeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV5Repeats(d_d, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV5(share + global prefetch)Repeats, MyGemmGlobalV5Repeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+
+            cudaFree(d_d);
+        }
+        {
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+
+            float *d_d = nullptr;
+            cudaMalloc(reinterpret_cast<void **>(&d_d), sizeof(float) * m * k);
+            Transpose(d_a, d_d, m, k);
+
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV5(share + global prefetch)NoRepeats, MyGemmGlobalV5NoRepeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV5NoRepeats(d_d, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV5(share + global prefetch)NoRepeats, MyGemmGlobalV5NoRepeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+
+            cudaFree(d_d);
+        }
+        {
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+
+            float *d_d = nullptr;
+            cudaMalloc(reinterpret_cast<void **>(&d_d), sizeof(float) * m * k);
+            Transpose(d_a, d_d, m, k);
+
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV6(share + global prefetch + share prefetch)Repeats, MyGemmGlobalV6Repeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV6Repeats(d_d, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV6(share + global prefetch + share prefetch)Repeats, MyGemmGlobalV6Repeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+
+            cudaFree(d_d);
+        }
+        {
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+
+            float *d_d = nullptr;
+            cudaMalloc(reinterpret_cast<void **>(&d_d), sizeof(float) * m * k);
+            Transpose(d_a, d_d, m, k);
+
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV6(share + global prefetch + share prefetch)NoRepeats, MyGemmGlobalV6NoRepeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV6NoRepeats(d_d, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV6(share + global prefetch + share prefetch)NoRepeats, MyGemmGlobalV6NoRepeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
 
             cudaFree(d_d);
         }
