@@ -51,7 +51,6 @@ __global__ void MyGemmGlobalImplV1(float *a, float *b, float *c,
             }
         }
     }
-//    printf("%f, %f", a_cache[0][0], b_cache[0][0]);
 #pragma unroll
     for (int i = 0; i < TileH; i++) {
 #pragma unroll

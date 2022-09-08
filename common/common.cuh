@@ -119,17 +119,22 @@ public:
     ~OutputCallBack() {
         MemCpy();
         bool fail = false;
+        int index = -1;
+        T real, result;
         for (int i = 0; i < length_; i++) {
             auto h_output = (*h_ptr_)[i];
             auto refer_output = (*refer_ptr_)[i];
-            if (std::abs(h_output - refer_output) / std::abs(h_output) > 5e-2) {
+            if (std::abs(h_output - refer_output) / std::abs(h_output) > 5e-2  && std::abs(h_output - refer_output) >= 0.0005) {
                 fail = true;
+                real = refer_output;
+                result = h_output;
+                index = i;
             }
         }
         if (!fail) {
             std::cout << "eval success!" << std::endl;
         } else {
-            std::cout << "eval fail!" << std::endl;
+            std::cout << "eval fail! index: " << index << ", real: " << real << ", result: " << result << "." << std::endl;
         }
         if (h_ptr_ && *h_ptr_) {
             free(*h_ptr_);

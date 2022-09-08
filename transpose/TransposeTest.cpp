@@ -53,6 +53,14 @@ private:
                 ProfileKernel("transpose", Transpose(d_a, d_out, m, n), RepeatTimes);
             }
         }
+        {
+            int m = 1024, n = 8;
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * n);
+            auto callBackOut = OutputMallocAndDelayCpy(&h_out, &refer_out, &d_out, m * n);
+            TestLaunchKernel("transpose", Transpose(d_a, d_out, m, n), TransposeRefer(&a, &refer_out, m, n)());
+            WarmupKernel(Transpose(d_a, d_out, m, n));
+            ProfileKernel("transpose", Transpose(d_a, d_out, m, n), RepeatTimes);
+        }
         return true;
     }
 };

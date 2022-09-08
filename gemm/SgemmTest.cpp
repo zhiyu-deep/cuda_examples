@@ -7,6 +7,7 @@
 
 #include "register.h"
 #include "common.cuh"
+#include "transpose.cuh"
 
 #include "MyGemmV1.h"
 #include "MyGemmV2.cuh"
@@ -55,7 +56,7 @@ public:
 
 private:
     bool SGemmTest() const {
-        int m = 1024, n = 1024, k = 32;
+        int m = 1024, n = 896, k = 4;
         float *a, *b, *c, *d_a, *d_b, *d_c;
         float *refer_c;
 
@@ -83,11 +84,35 @@ private:
             // prepare input.
             auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
             auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+
+            float *d_d = nullptr;
+            cudaMalloc(reinterpret_cast<void **>(&d_d), sizeof(float) * m * k);
+            Transpose(d_a, d_d, m, k);
+
             // prepare output.
             auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
-            TestLaunchKernel(MyGemmGlobalV3, MyGemmGlobalV3(d_a, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
-            WarmupKernel(MyGemmGlobalV3(d_a, d_b, d_c, m, n, k));
-            ProfileKernel(MyGemmGlobalV3, MyGemmGlobalV3(d_a, d_b, d_c, m, n, k), (RepeatTimes + 1));
+            TestLaunchKernel(MyGemmGlobalV3Repeats, MyGemmGlobalV3Repeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV3Repeats(d_d, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV3Repeats, MyGemmGlobalV3Repeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+
+            cudaFree(d_d);
+        }
+        {
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, m * k);
+            auto callBackB = InputMallocAndCpy(&b, &d_b, n * k);
+
+            float *d_d = nullptr;
+            cudaMalloc(reinterpret_cast<void **>(&d_d), sizeof(float) * m * k);
+            Transpose(d_a, d_d, m, k);
+
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, m * n);
+            TestLaunchKernel(MyGemmGlobalV3NoRepeats, MyGemmGlobalV3NoRepeats(d_d, d_b, d_c, m, n, k), GemmRefer(&a, &b, &refer_c, m, n, k)());
+            WarmupKernel(MyGemmGlobalV3NoRepeats(d_d, d_b, d_c, m, n, k));
+            ProfileKernel(MyGemmGlobalV3NoRepeats, MyGemmGlobalV3NoRepeats(d_d, d_b, d_c, m, n, k), (RepeatTimes));
+
+            cudaFree(d_d);
         }
         {
             // prepare input.
