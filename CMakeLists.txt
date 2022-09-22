@@ -9,7 +9,8 @@ include_directories(${PROJECT_SOURCE_DIR})
 
 #=======================functions=========================================
 # 1. scan
-add_library(scan STATIC scan/scan_impl.cu)
+file(GLOB scan_files scan/*.cu scan/*.cpp)
+add_library(scan STATIC "${scan_files}")
 # 2. gemm
 file(GLOB gemm_files gemm/*.cu gemm/*.cpp)
 add_library(gemm STATIC "${gemm_files}")
@@ -35,4 +36,5 @@ target_link_libraries(arm64_test
         PRIVATE scan
         PRIVATE gemm
         PRIVATE conv
-        PRIVATE transpose)
+        PRIVATE transpose
+        PRIVATE scan)

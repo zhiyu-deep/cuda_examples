@@ -7,10 +7,13 @@
 
 extern void GlobalRegisterGemm();
 extern void GlobalRegisterTranspose();
+extern void GlobalRegisterScan();
 
 bool GlobalRegister() {
     GlobalRegisterGemm();
     GlobalRegisterTranspose();
+    GlobalRegisterScan();
+
     return true;
 }
 

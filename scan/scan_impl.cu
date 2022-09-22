@@ -2,129 +2,103 @@
 // Created by 63479 on 2022/8/10.
 //
 
+#include "utils_policy.h"
+#include "utils_io.cuh"
 #include "scan_impl.h"
-#include "stdio.h"
+#include "utils_assert.cuh"
+
+template<int length>
+struct WarpScanPolicyIntern {
+    struct Vec1 : public ChainPolicy<length % 2 == 0, Vec1, Vec1> {
+        static constexpr int thread_nums = 16;
+        static constexpr int thread_vec = 1;
+        static constexpr int max_threads = 32;
+    };
+
+    struct Vec2 : public ChainPolicy<length % 2 == 0, Vec2, Vec1> {
+        static constexpr int thread_nums = 16;
+        static constexpr int thread_vec = 2;
+        static constexpr int max_threads = 32;
+    };
+
+    struct Vec3 : public ChainPolicy<length % 3 == 0, Vec3, Vec2> {
+        static constexpr int thread_nums = 16;
+        static constexpr int thread_vec = 3;
+        static constexpr int max_threads = 32;
+    };
+
+    struct Vec4 : public ChainPolicy<length % 4 == 0, Vec4, Vec3> {
+        static constexpr int thread_nums = 16;
+        static constexpr int thread_vec = 4;
+        static constexpr int max_threads = 32;
+    };
+
+    static constexpr int max_length = 32 * 1 * 16;
+    struct Vec : public ChainPolicy<length <= max_length, Vec4, InvalidPolicy> {};
+
+    using PolicyAgent = Vec4;
+};
 
 /**
- * @brief 线程级别scan.
- * @param t_val
- * @return
+ * @brief
+ * @param input
+ * @param output
  */
-__device__ float WarpScan(float t_val) {
-    auto exchange = __shfl_sync(0xffffffff, t_val, 0, 2);
-    if (threadIdx.x & 0x1) { t_val += exchange; }
-    exchange = __shfl_sync(0xffffffff, t_val, 1, 4);
-    if (threadIdx.x & 0x2) { t_val += exchange; }
-    exchange = __shfl_sync(0xffffffff, t_val, 3, 8);
-    if (threadIdx.x & 0x4) { t_val += exchange; }
-    exchange = __shfl_sync(0xffffffff, t_val, 7, 16);
-    if (threadIdx.x & 0x8) { t_val += exchange; }
-    exchange = __shfl_sync(0xffffffff, t_val, 15, 32);
-    if (threadIdx.x & 0x10) { t_val += exchange; }
-    return t_val;
-}
+template<int thread_nums, int thread_vec, int threads>
+__global__ void WarpScan(const float *input, float *output, int length) {
+    assert(length % thread_vec == 0);
+    assert(thread_nums % thread_vec == 0);
 
-template<int warps>
-__device__ float BlockScan(float t_val) {
-    __shared__ float smem[warps * 32];
+    Vector<float, thread_nums, thread_vec> registers;
+    registers << (input + threadIdx.x * thread_nums);
 
-    // 1. 有数据的warp存储.
-    smem[threadIdx.x] = t_val;
-    __syncthreads();
+    // todo: thread scan, save to register.
+#pragma unroll
+    for (int i = 1; i < thread_nums; i++) {
+        registers[i] += registers[i - 1];
+    }
 
-    // 2. 每个warp委派线程去处理数据.
-    int warp_id = threadIdx.x / 32;
-    for (int i = 1; i < warps; i *= 2) {
-        if (warp_id & i) {  // 1. 挑选warp.
-            // 1. 定位到width.
-            float exchange = smem[threadIdx.x / (i * 64) * (i * 64) + i * 32 - 1];
-            t_val += exchange;
-            smem[threadIdx.x] = t_val;
+    // todo: warp scan.
+    float exchange = registers[thread_nums - 1];
+#pragma unroll
+    for (int i = 2; i < 2 * threads; i *= 2) {
+        exchange = __shfl_sync(0xffffffff, exchange, i / 2 - 1, i);
+        if ((threadIdx.x % i) >= (i / 2)) {
+#pragma unroll
+            for (int j = 0; j < thread_nums; j++) {
+                registers[j] += exchange;
+            }
         }
-        __syncthreads();
+        exchange = registers[thread_nums - 1];
     }
-    return t_val;
-}
 
-template<int warps>
-__global__ void ScanBlockPackOneImpl(const float * __restrict__ input, float *output, int length) {
-    input += blockDim.x * blockIdx.x;
-    output += blockDim.x * blockIdx.x;
-
-    // thread.
-    auto t_ptr = input + threadIdx.x;
-    float t_val = blockDim.x * blockIdx.x + threadIdx.x >= length ? 0.f : t_ptr[0];
-
-    // warp.
-    t_val = WarpScan(t_val);
-    // block.
-    t_val = BlockScan<warps>(t_val);
-    // save.
-    if (threadIdx.x < length) {
-        output[threadIdx.x] = t_val;
-    }
-}
-
-__global__ void GlobalScan(int i, float *output) {
-    if (blockIdx.x & i) {
-        auto exchange = output[blockIdx.x / (i * 2) * (i * 2) * (blockDim.x) + i * (blockDim.x) - 1];
-        (output + blockIdx.x / (i * 2) * (i * 2) * (blockDim.x) + i * (blockDim.x))[threadIdx.x] += exchange;
-    }
+    // todo: write to global.
+    registers >> (output + threadIdx.x * thread_nums);
 }
 
 void Scan(const  float *input, float *output, int length) {
-    if (length <= 32 * 32) {
-        dim3 grid(1);
-        if (32 >= length) {
-            constexpr int warps = 1;
-            dim3 block(32 * warps);
-            ScanBlockPackOneImpl<warps><<<grid, block, sizeof(float) * 32 * warps>>>(input, output, length);
-        }
-#define Launch(warps)                        \
-        else if (warps * 32 >= length) {     \
-            dim3 block(32 * warps);          \
-            ScanBlockPackOneImpl<warps><<<grid, block, sizeof(float) * 32 * warps>>>(input, output, length);  \
-        }
-        Launch(2)
-        Launch(3)
-        Launch(4)
-        Launch(5)
-        Launch(6)
-        Launch(7)
-        Launch(8)
-        Launch(9)
-        Launch(10)
-        Launch(11)
-        Launch(12)
-        Launch(13)
-        Launch(14)
-        Launch(15)
-        Launch(16)
-        Launch(17)
-        Launch(18)
-        Launch(19)
-        Launch(20)
-        Launch(21)
-        Launch(22)
-        Launch(23)
-        Launch(24)
-        Launch(25)
-        Launch(26)
-        Launch(27)
-        Launch(28)
-        Launch(29)
-        Launch(30)
-        Launch(31)
-        Launch(32)
-    } else {
-        constexpr int warps = 32;
-        dim3 block(warps * 32);
-        int blocks = (length + warps * 32 - 1) / (warps * 32);
-        dim3 grid((length + warps * 32 - 1) / (warps * 32));
-        ScanBlockPackOneImpl<warps><<<grid, block, sizeof(float) * 32 * warps>>>(input, output, length);
-        for (int i = 1; i < blocks; i*=2) {
-            GlobalScan<<<grid, blocks>>>(i, output);
+    // warp scan.
+    {
+        constexpr int thread_nums = 16;
+        constexpr int max_threads = 32;
+        if (thread_nums * max_threads >= length) {
+            if (length % 4 == 0) {
+                dim3 block(length / thread_nums);
+                dim3 grid(1);
+                WarpScan<thread_nums, 4, max_threads><<<grid, block>>>(input, output, length);
+            } else if (length % 3 == 0) {
+                dim3 block(length / thread_nums);
+                dim3 grid(1);
+                WarpScan<thread_nums, 3, max_threads><<<grid, block>>>(input, output, length);
+            } else if (length % 2 == 0) {
+                dim3 block(length / thread_nums);
+                dim3 grid(1);
+                WarpScan<thread_nums, 2, max_threads><<<grid, block>>>(input, output, length);
+            } else {
+                dim3 block(length / thread_nums);
+                dim3 grid(1);
+                WarpScan<thread_nums, 1, max_threads><<<grid, block>>>(input, output, length);
+            }
         }
     }
-    cudaDeviceSynchronize();
 }
