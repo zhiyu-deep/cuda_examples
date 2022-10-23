@@ -12,6 +12,12 @@
 #include "cuda_runtime_api.h"
 #include <chrono>
 
+//===========================================================(data)=====================================================
+#define UP_ROUND(a, b) (((a) + (b) - 1) / (b) * (b))
+#define UP_DIVIDE(a, b) (((a) + (b) - 1) / (b))
+#define DOWN_ROUND(a, b) ((a) / (b) * (b))
+#define DOWN_DIVIDE(a, b) ((a) / (b))
+
 //===========================================================(timer)====================================================
 using namespace std::chrono;
 class TimerClock
@@ -84,7 +90,7 @@ private:
 };
 
 /**
- * @brief 为当前计算任务分配input; 外部只负责不用, 不负责释放.
+ * @brief 为当前计算任务分配input; 外部只负责使用, 不负责释放.
  */
 template<typename T>
 auto InputMallocAndCpy(T **h_ptr, T**d_ptr, int length) -> InputCallBack<T> {
@@ -119,22 +125,28 @@ public:
     ~OutputCallBack() {
         MemCpy();
         bool fail = false;
-        int index = -1;
-        T real, result;
+        int start_index = -1, end_index = -1;
+        T start_real, start_result, end_real, end_result;
         for (int i = 0; i < length_; i++) {
             auto h_output = (*h_ptr_)[i];
             auto refer_output = (*refer_ptr_)[i];
             if (std::abs(h_output - refer_output) / std::abs(h_output) > 5e-2  && std::abs(h_output - refer_output) >= 0.0005) {
                 fail = true;
-                real = refer_output;
-                result = h_output;
-                index = i;
+                end_real = refer_output;
+                end_result = h_output;
+                end_index = i;
+                if (start_index == -1) {
+                    start_index = i;
+                    start_real = refer_output;
+                    start_result = h_output;
+                }
             }
         }
         if (!fail) {
             std::cout << "eval success!" << std::endl;
         } else {
-            std::cout << "eval fail! index: " << index << ", real: " << real << ", result: " << result << "." << std::endl;
+            std::cout << "eval fail! start_index: " << start_index << ", real: " << start_real << ", result: " << start_result << "; "
+                                 << "end_index: "   << end_index   << ", real: " << end_real   << ", result: " << end_result   << "." << std::endl;
         }
         if (h_ptr_ && *h_ptr_) {
             free(*h_ptr_);
@@ -165,7 +177,6 @@ void Default();
 
 /**
  * @brief 为当前计算任务分配output指针(cpu output, gpu output, refer output); 务必在InputMallocAndCpy执行后执行.
- * @return 务必用 const& 来引用返回结果, 否则会提前析构.
  */
 template<typename T>
 auto OutputMallocAndDelayCpy(T **h_ptr, T **refer_ptr, T **d_ptr, int length) -> OutputCallBack<T> {

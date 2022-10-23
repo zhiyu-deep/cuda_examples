@@ -7,10 +7,7 @@
 #include<random>
 
 float GetRand() {
-    using namespace std;
-    static default_random_engine e;
-    static uniform_real_distribution<float> u(-1, 1);
-    return u(e);
+    return rand() / double(RAND_MAX);
 }
 
 void Default() { return; }

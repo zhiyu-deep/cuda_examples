@@ -8,11 +8,13 @@
 extern void GlobalRegisterGemm();
 extern void GlobalRegisterTranspose();
 extern void GlobalRegisterScan();
+extern void GlobalRegisterConv();
 
 bool GlobalRegister() {
     GlobalRegisterGemm();
     GlobalRegisterTranspose();
     GlobalRegisterScan();
+    GlobalRegisterConv();
 
     return true;
 }

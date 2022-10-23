@@ -16,7 +16,8 @@ file(GLOB gemm_files gemm/*.cu gemm/*.cpp)
 add_library(gemm STATIC "${gemm_files}")
 target_include_directories(gemm INTERFACE ${CMAKE_CURRENT_LIST_DIR}/gemm)
 # 3. conv
-add_library(conv STATIC conv/myImg2Col.cu)
+FILE(GLOB conv_files conv/*)
+add_library(conv STATIC ${conv_files})
 # 4. transpose
 file(GLOB transpose_files transpose/*.cu transpose/*.cpp)
 add_library(transpose STATIC "${transpose_files}")
