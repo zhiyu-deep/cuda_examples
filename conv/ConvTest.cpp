@@ -38,7 +38,7 @@ public:
     void operator() () const {
         int output_h = CalculateOutputLength(h_, k_h_, d_h_, p_h_, s_h_),
             output_w = CalculateOutputLength(w_, k_w_, d_w_, p_w_, s_w_);
-        int batch_stride = (h_ + 2 * p_h_) * (w_ + 2 * p_w_) * 4, channel_stride = batch_stride * n_, h_stride = (w_ + 2 * p_w_) * 4;
+        int batch_stride = (h_) * (w_) * 4, channel_stride = batch_stride * n_, h_stride = (w_) * 4;
         for (int g = 0; g < UP_DIVIDE(outputC_, 4); g++) {
             for (int i = 0; i < output_h * output_w * n_; i++) {
                 for (int j = 0; j < 4; j++) {
@@ -64,7 +64,6 @@ public:
                                     } else {
                                         a_value = a_pad_ptr[m * channel_stride + n * h_stride + k * 4 + y];
                                     }
-//                                    std::cout << a_value << "," << weight_value << std::endl;
                                     accumulate_value += a_value * weight_value;
                                 }
                             }
@@ -96,7 +95,7 @@ public:
 
 private:
     bool ConvTestImpl() const {
-        int n = 1, inputC = 160, h = 11, w = 12, outputC = 160;
+        int n = 2, inputC = 16, h = 11, w = 12, outputC = 16;
         int k_h = 3, k_w = 3, d_h = 1, d_w = 1, p_h = 2, p_w = 2, s_h = 1, s_w = 1;
         if (!CheckParamsLegal(h, k_h,d_h, p_h, s_h)) {
             throw std::invalid_argument("无效param.");
@@ -119,6 +118,15 @@ private:
                              ConvNC4HW4Refer(&a, &weight, &refer_c, n, inputC, h, w, outputC, p_h, p_w, d_h, d_w, s_h, s_w, k_h, k_w)());
             WarmupKernel(Conv(d_a, d_weight, d_c, n, inputC, h, w, outputC, k_w, k_h, d_w, d_h, s_w, s_h, p_w, p_h, kNaive));
             ProfileKernel(MyConvNaive, Conv(d_a, d_weight, d_c, n, inputC, h, w, outputC, k_w, k_h, d_w, d_h, s_w, s_h, p_w, p_h, kNaive), RepeatTimes);
+        }
+        {
+            // input: NC4HW4, weight: C4, output: NC4HW4.
+            // prepare input.
+            auto callBackA = InputMallocAndCpy(&a, &d_a, n * h * w * UP_ROUND(inputC, 4));
+            auto callBackB = InputMallocAndCpy(&weight, &d_weight, h * w * inputC * UP_ROUND(outputC, 4));
+            // prepare output.
+            auto callBack = OutputMallocAndDelayCpy(&c, &refer_c, &d_c, n * output_h * output_w * UP_ROUND(outputC, 4));
+            Conv(d_a, d_weight, d_c, n, inputC, h, w, outputC, k_w, k_h, d_w, d_h, s_w, s_h, p_w, p_h, kOpt1);
         }
         return true;
     }

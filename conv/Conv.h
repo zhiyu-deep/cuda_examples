@@ -7,6 +7,7 @@
 
 enum ConvImpl {
     kNaive,
+    kOpt1
 };
 
 /**

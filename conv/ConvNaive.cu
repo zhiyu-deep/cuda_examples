@@ -18,7 +18,7 @@ __global__ void ConvNaiveImpl(
     int conv_rows = CalculateOutputLength(h, kernelY, dilateY, padY, strideY),
         conv_cols = CalculateOutputLength(w, kernelX, dilateX, padX, strideX);
     // attributes:
-    int a_batch_stride = (h + 2 * padY) * (w + 2 * padX) * 4, a_channel_stride = a_batch_stride * n, a_h_stride = (w + 2 * padX) * 4;
+    int a_batch_stride = (h) * (w) * 4, a_channel_stride = a_batch_stride * n, a_h_stride = (w) * 4;
     // 当前线程: 展开后的output点.
     int outputX = blockIdx.x * 4 + threadIdx.x % 4,
         outputY = blockDim.x / 4 * blockIdx.y + threadIdx.x / 4;
