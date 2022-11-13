@@ -1,9 +1,3 @@
-if(__hpcc_cuda_common_INCLUDED__)
-    return()
-else()
-    set(__hpcc_cuda_common_INCLUDED__ TRUE)
-endif()
-
 set(CMAKE_CUDA_STANDARD 11)
 
 # NOTE: cross compiling requires env `CUDA_TOOLKIT_ROOT`
@@ -46,7 +40,8 @@ endif()
 include_directories(${CUDA_TOOLKIT_ROOT_DIR}/targets/x86_64-linux/include SYSTEM)
 link_directories(${CUDA_TOOLKIT_ROOT_DIR}/targets/x86_64-linux/lib SYSTEM)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${CUDA_NVCC_FLAGS}")
+# 默认sm_70.
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70 ${CUDA_NVCC_FLAGS}")
 
 macro(hpcc_cuda_use_msvc_static_runtime)
     string(REPLACE -MD -MT CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG}")

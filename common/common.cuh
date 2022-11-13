@@ -5,6 +5,7 @@
 #ifndef CUDA_TEST_COMMON_CUH
 #define CUDA_TEST_COMMON_CUH
 
+#include <cstring>
 #include <cstdlib>
 #include <memory>
 #include <iostream>
@@ -59,6 +60,13 @@ private:
 
 //========================================================(init)========================================================
 
+// 数据初始化方式.
+enum InitMode {
+    kRand,
+    kZero,
+    kOne,
+};
+
 float GetRand();
 
 /**
@@ -93,11 +101,23 @@ private:
  * @brief 为当前计算任务分配input; 外部只负责使用, 不负责释放.
  */
 template<typename T>
-auto InputMallocAndCpy(T **h_ptr, T**d_ptr, int length) -> InputCallBack<T> {
+auto InputMallocAndCpy(T **h_ptr, T**d_ptr, int length, InitMode mode = kRand) -> InputCallBack<T> {
     *h_ptr = (T*)malloc(sizeof(T) * length);
     cudaMalloc((void**)d_ptr, sizeof(T) * length);
     for (int i = 0; i < length; i++) {
-        (*h_ptr)[i] = GetRand();
+        switch (mode) {
+            case kRand:
+                (*h_ptr)[i] = GetRand();
+                break;
+            case kZero:
+                (*h_ptr)[i] = (T)0;
+                break;
+            case kOne:
+                (*h_ptr)[i] = (T)1;
+                break;
+            default:
+                throw std::invalid_argument("无效mode.");
+        }
     }
     cudaMemcpy(*d_ptr, *h_ptr, sizeof(T) * length, cudaMemcpyHostToDevice);
     return InputCallBack<T>(h_ptr, d_ptr);
@@ -183,9 +203,17 @@ auto OutputMallocAndDelayCpy(T **h_ptr, T **refer_ptr, T **d_ptr, int length) ->
     *h_ptr = (T*)malloc(sizeof(T) * length);
     *refer_ptr = (T*) malloc(sizeof(T) * length);
     cudaMalloc((void**)d_ptr,sizeof(T) * length);
+    memset(*refer_ptr, 0, sizeof(T) * length);
     cudaMemset(*d_ptr, 0, sizeof(T) * length);
     cudaDeviceSynchronize();
     return OutputCallBack<T>(h_ptr, refer_ptr, d_ptr, length);
+}
+
+template<typename T>
+void OutputMalloc(T **d_ptr, int length) {
+    cudaMalloc((void**)d_ptr,sizeof(T) * length);
+    cudaMemset(*d_ptr, 0, sizeof(T) * length);
+    cudaDeviceSynchronize();
 }
 
 

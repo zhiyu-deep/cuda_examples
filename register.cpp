@@ -9,12 +9,14 @@ extern void GlobalRegisterGemm();
 extern void GlobalRegisterTranspose();
 extern void GlobalRegisterScan();
 extern void GlobalRegisterConv();
+extern void GlobalRegisterWmma();
 
 bool GlobalRegister() {
     GlobalRegisterGemm();
     GlobalRegisterTranspose();
     GlobalRegisterScan();
     GlobalRegisterConv();
+    GlobalRegisterWmma();
 
     return true;
 }

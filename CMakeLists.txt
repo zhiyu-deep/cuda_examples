@@ -22,7 +22,9 @@ add_library(conv STATIC ${conv_files})
 file(GLOB transpose_files transpose/*.cu transpose/*.cpp)
 add_library(transpose STATIC "${transpose_files}")
 include_directories(transpose)
-
+# 5. wmma
+file(GLOB wmma_files wmma/*)
+add_library(wmma STATIC "${wmma_files}")
 
 
 # ==============================main=============================
@@ -38,4 +40,5 @@ target_link_libraries(arm64_test
         PRIVATE gemm
         PRIVATE conv
         PRIVATE transpose
-        PRIVATE scan)
+        PRIVATE scan
+        PRIVATE wmma)
