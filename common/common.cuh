@@ -13,6 +13,11 @@
 #include "cuda_runtime_api.h"
 #include <chrono>
 
+#include "utils_assert.cuh"
+#include "utils_io.cuh"
+#include "utils_policy.h"
+#include "utils_type.h"
+
 //===========================================================(data)=====================================================
 #define UP_ROUND(a, b) (((a) + (b) - 1) / (b) * (b))
 #define UP_DIVIDE(a, b) (((a) + (b) - 1) / (b))
@@ -67,7 +72,60 @@ enum InitMode {
     kOne,
 };
 
-float GetRand();
+void float16(uint16_t *__restrict out, const float in);
+
+void float32(float *__restrict out, const uint16_t in);
+
+template<typename T = float>
+T GetRand() {
+    auto float_num = rand() / double(RAND_MAX);
+    if (std::is_same<T, float>::value) { return float_num; }
+    else if (std::is_same<T, double>::value) { return float_num; }
+    else if (std::is_same<T, uint16_t>::value) {
+        uint16_t num;
+        float16(&num, float_num);
+        return num;
+    } else if (std::is_same<T, uint32_t>::value) {
+        // todo: https://cloud.tencent.com/developer/article/1893665.
+        throw std::invalid_argument("not implemented.");
+    } else {
+        throw std::invalid_argument("not supported data type.");
+    }
+}
+
+template<typename T = float>
+T GetOne() {
+    auto float_num = 1;
+    if (std::is_same<T, float>::value) { return float_num; }
+    else if (std::is_same<T, double>::value) { return float_num; }
+    else if (std::is_same<T, uint16_t>::value) {
+        uint16_t num;
+        float16(&num, float_num);
+        return num;
+    } else if (std::is_same<T, uint32_t>::value) {
+        // todo: https://cloud.tencent.com/developer/article/1893665.
+        throw std::invalid_argument("not implemented.");
+    } else {
+        throw std::invalid_argument("not supported data type.");
+    }
+}
+
+template<typename T = float>
+T GetZero() {
+    auto float_num = rand() / double(RAND_MAX);
+    if (std::is_same<T, float>::value) { return float_num; }
+    else if (std::is_same<T, double>::value) { return float_num; }
+    else if (std::is_same<T, uint16_t>::value) {
+        uint16_t num;
+        float16(&num, float_num);
+        return num;
+    } else if (std::is_same<T, uint32_t>::value) {
+        // todo: https://cloud.tencent.com/developer/article/1893665.
+        throw std::invalid_argument("not implemented.");
+    } else {
+        throw std::invalid_argument("not supported data type.");
+    }
+}
 
 /**
  * @brief 管理一组input指针.
@@ -98,7 +156,11 @@ private:
 };
 
 /**
- * @brief 为当前计算任务分配input; 外部只负责使用, 不负责释放.
+ * @brief 为当前计算任务分配input; 外部只负责使用, 不负责释放; 类型:
+ *        1. float.
+ *        2. double.
+ *        3. uint16_t -> half.
+ *        4. uint32_t -> tf32.
  */
 template<typename T>
 auto InputMallocAndCpy(T **h_ptr, T**d_ptr, int length, InitMode mode = kRand) -> InputCallBack<T> {
@@ -107,13 +169,13 @@ auto InputMallocAndCpy(T **h_ptr, T**d_ptr, int length, InitMode mode = kRand) -
     for (int i = 0; i < length; i++) {
         switch (mode) {
             case kRand:
-                (*h_ptr)[i] = GetRand();
+                (*h_ptr)[i] = GetRand<T>();
                 break;
             case kZero:
-                (*h_ptr)[i] = (T)0;
+                (*h_ptr)[i] = GetZero<T>();
                 break;
             case kOne:
-                (*h_ptr)[i] = (T)1;
+                (*h_ptr)[i] = GetOne<T>();
                 break;
             default:
                 throw std::invalid_argument("无效mode.");
@@ -146,10 +208,27 @@ public:
         MemCpy();
         bool fail = false;
         int start_index = -1, end_index = -1;
-        T start_real, start_result, end_real, end_result;
+        double start_real, start_result, end_real, end_result;
         for (int i = 0; i < length_; i++) {
-            auto h_output = (*h_ptr_)[i];
-            auto refer_output = (*refer_ptr_)[i];
+            double h_output, refer_output;
+            if (std::is_same<T, float>::value) {
+                h_output = (*h_ptr_)[i];
+                refer_output = (*refer_ptr_)[i];
+            } else if (std::is_same<T, double>::value) {
+                h_output = (*h_ptr_)[i];
+                refer_output = (*refer_ptr_)[i];
+            } else if (std::is_same<T, uint16_t>::value) {
+                float tmp1, tmp2;
+                float32(&tmp1, (*h_ptr_)[i]);
+                float32(&tmp2, (*refer_ptr_)[i]);
+                h_output = tmp1;
+                refer_output = tmp2;
+            } else if (std::is_same<T, uint32_t>::value) {
+                // todo: https://cloud.tencent.com/developer/article/1893665.
+                throw std::invalid_argument("not implemented.");
+            } else {
+                throw std::invalid_argument("not supported data type.");
+            }
             if (std::abs(h_output - refer_output) / std::abs(h_output) > 5e-2  && std::abs(h_output - refer_output) >= 0.0005) {
                 fail = true;
                 end_real = refer_output;

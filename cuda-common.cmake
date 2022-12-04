@@ -41,7 +41,7 @@ include_directories(${CUDA_TOOLKIT_ROOT_DIR}/targets/x86_64-linux/include SYSTEM
 link_directories(${CUDA_TOOLKIT_ROOT_DIR}/targets/x86_64-linux/lib SYSTEM)
 
 # 默认sm_70.
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70 ${CUDA_NVCC_FLAGS}")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_80 ${CUDA_NVCC_FLAGS}")
 
 macro(hpcc_cuda_use_msvc_static_runtime)
     string(REPLACE -MD -MT CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG}")

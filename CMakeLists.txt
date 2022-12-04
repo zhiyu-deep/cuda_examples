@@ -6,6 +6,10 @@ include(cuda-common.cmake)
 include_directories(${PROJECT_SOURCE_DIR})
 
 
+#=======================common============================================
+file(GLOB common_files common/*)
+include_directories(common)
+add_library(common STATIC "${common_files}")
 
 #=======================functions=========================================
 # 1. scan
@@ -25,20 +29,24 @@ include_directories(transpose)
 # 5. wmma
 file(GLOB wmma_files wmma/*)
 add_library(wmma STATIC "${wmma_files}")
-
+# 6. ptx
+file(GLOB ptx_files ptx/*)
+add_library(ptxs STATIC "${ptx_files}")
+target_link_libraries(ptxs PRIVATE common)
 
 # ==============================main=============================
-file(GLOB common_files common/*)
-include_directories(common)
-add_executable(arm64_test main.cpp "${common_files}" register.cpp)
+
+add_executable(arm64_test main.cpp register.cpp)
 
 set_target_properties(arm64_test PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
 target_link_libraries(arm64_test
+        PRIVATE common
         PRIVATE cudart
         PRIVATE scan
         PRIVATE gemm
         PRIVATE conv
         PRIVATE transpose
         PRIVATE scan
-        PRIVATE wmma)
+        PRIVATE wmma
+        PRIVATE ptxs)

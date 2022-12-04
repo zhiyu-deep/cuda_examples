@@ -10,6 +10,7 @@ extern void GlobalRegisterTranspose();
 extern void GlobalRegisterScan();
 extern void GlobalRegisterConv();
 extern void GlobalRegisterWmma();
+extern void GlobalRegisterPtxsGemm();
 
 bool GlobalRegister() {
     GlobalRegisterGemm();
@@ -17,6 +18,7 @@ bool GlobalRegister() {
     GlobalRegisterScan();
     GlobalRegisterConv();
     GlobalRegisterWmma();
+    GlobalRegisterPtxsGemm();
 
     return true;
 }
